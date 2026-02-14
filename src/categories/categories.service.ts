@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -7,124 +7,112 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class CategoriesService {
     constructor(private prisma: PrismaService) { }
 
-    // Default categories to seed for new users
-    private defaultCategories = [
-        { name: 'Food', icon: '🍔', color: '#FF6B6B' },
-        { name: 'Transport', icon: '🚗', color: '#4ECDC4' },
-        { name: 'Shopping', icon: '🛍️', color: '#95E1D3' },
-        { name: 'Entertainment', icon: '🎬', color: '#F38181' },
-        { name: 'Bills', icon: '💡', color: '#AA96DA' },
-        { name: 'Health', icon: '⚕️', color: '#FCBAD3' },
-        { name: 'Education', icon: '📚', color: '#A8D8EA' },
-        { name: 'Housing', icon: '🏠', color: '#FFD93D' },
-        { name: 'Travel', icon: '✈️', color: '#6BCB77' },
-        { name: 'Other', icon: '📌', color: '#9D9D9D' },
-    ];
-
-    /**
-     * Seed default categories for a new user
-     */
-    async seedDefaultCategories(userId: string) {
-        const categories = this.defaultCategories.map(cat => ({
-            userId,
-            name: cat.name,
-            icon: cat.icon,
-            color: cat.color,
-            isDefault: true,
-        }));
-
-        await this.prisma.category.createMany({
-            data: categories,
+    // Get all categories (default + user's custom) with monthly stats
+    async findAll(userId: string) {
+        const categories = await this.prisma.category.findMany({
+            where: {
+                OR: [
+                    { isDefault: true },       // Default categories
+                    { userId: userId },         // User's custom categories
+                ],
+            },
+            orderBy: [
+                { isDefault: 'desc' },       // Default first
+                { name: 'asc' },             // Then alphabetical
+            ],
         });
+
+        // Get start and end of current month
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // Fetch spending for each category
+        const categoriesWithStats = await Promise.all(
+            categories.map(async (category) => {
+                const spending = await this.prisma.expense.aggregate({
+                    where: {
+                        userId,
+                        categoryId: category.id,
+                        date: {
+                            gte: startOfMonth,
+                            lte: endOfMonth,
+                        },
+                    },
+                    _sum: {
+                        amount: true,
+                    },
+                });
+
+                return {
+                    ...category,
+                    monthlySpent: Number(spending._sum.amount || 0),
+                };
+            }),
+        );
+
+        return categoriesWithStats;
     }
 
-    /**
-     * Create a new category
-     */
+    // Create custom category
     async create(userId: string, createCategoryDto: CreateCategoryDto) {
         return this.prisma.category.create({
             data: {
+                ...createCategoryDto,
                 userId,
-                name: createCategoryDto.name,
-                icon: createCategoryDto.icon,
-                color: createCategoryDto.color,
-                budgetAmount: createCategoryDto.budgetAmount,
                 isDefault: false,
             },
         });
     }
 
-    /**
-     * Get all categories for a user
-     */
-    async findAll(userId: string) {
-        return this.prisma.category.findMany({
-            where: { userId },
-            orderBy: [
-                { isDefault: 'desc' }, // Default categories first
-                { createdAt: 'asc' },
-            ],
-        });
-    }
-
-    /**
-     * Get a specific category by ID
-     */
-    async findOne(userId: string, id: string) {
+    // Get single category
+    async findOne(id: string, userId: string) {
         const category = await this.prisma.category.findUnique({
             where: { id },
         });
 
         if (!category) {
-            throw new NotFoundException(`Category with ID ${id} not found`);
+            throw new NotFoundException('Category not found');
         }
 
-        if (category.userId !== userId) {
+        // Check if user has access (default or owns it)
+        if (!category.isDefault && category.userId !== userId) {
             throw new ForbiddenException('You do not have access to this category');
         }
 
         return category;
     }
 
-    /**
-     * Update a category
-     */
-    async update(userId: string, id: string, updateCategoryDto: UpdateCategoryDto) {
-        // Verify ownership
-        const category = await this.findOne(userId, id);
+    // Update custom category
+    async update(id: string, userId: string, updateCategoryDto: UpdateCategoryDto) {
+        const category = await this.findOne(id, userId);
 
-        // Prevent updating certain fields on default categories
-        if (category.isDefault && updateCategoryDto.name) {
-            throw new BadRequestException('Cannot change the name of a default category');
-        }
+        // Removed: ForbiddenException for default categories
 
         return this.prisma.category.update({
             where: { id },
-            data: {
-                name: updateCategoryDto.name,
-                icon: updateCategoryDto.icon,
-                color: updateCategoryDto.color,
-                budgetAmount: updateCategoryDto.budgetAmount,
-            },
+            data: updateCategoryDto,
+        });
+    }
+
+    // Delete custom category
+    async remove(id: string, userId: string) {
+        const category = await this.findOne(id, userId);
+
+        // Removed: ForbiddenException for default categories
+
+        return this.prisma.category.delete({
+            where: { id },
         });
     }
 
     /**
-     * Delete a category
+     * Placeholder for seeding user-specific data if needed in the future.
+     * With the current shared category system, default categories (userId: null, isDefault: true)
+     * are automatically available to all users.
      */
-    async remove(userId: string, id: string) {
-        // Verify ownership
-        const category = await this.findOne(userId, id);
-
-        // Prevent deletion of default categories
-        if (category.isDefault) {
-            throw new BadRequestException('Cannot delete a default category');
-        }
-
-        await this.prisma.category.delete({
-            where: { id },
-        });
-
-        return { message: 'Category deleted successfully' };
+    async seedDefaultCategories(userId: string) {
+        // No action needed for shared categories, but method must exist for Auth/Clerk services
+        return;
     }
 }

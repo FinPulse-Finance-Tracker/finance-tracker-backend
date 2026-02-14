@@ -1,20 +1,24 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsHexColor, IsNumber, Min } from 'class-validator';
 
 export class CreateCategoryDto {
-    @IsString()
-    @IsNotEmpty()
-    name: string;
+  @IsString()
+  @IsNotEmpty()
+  name: string;
 
-    @IsString()
-    @IsOptional()
-    icon?: string;
+  @IsString()
+  @IsOptional()
+  icon?: string;
 
-    @IsString()
-    @IsOptional()
-    color?: string;
+  @IsHexColor()
+  @IsOptional()
+  color?: string;
 
-    @IsNumber()
-    @Min(0)
-    @IsOptional()
-    budgetAmount?: number;
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  budgetAmount?: number;
 }

@@ -122,13 +122,14 @@ export class AuthService {
     }
 
     // Validate user for JWT strategy
-    async validateUser(userId: string) {
+    async validateUser(clerkId: string) {
         return this.prisma.user.findUnique({
-            where: { id: userId },
+            where: { clerkId: clerkId },
             select: {
                 id: true,
                 email: true,
                 name: true,
+                clerkId: true,
             },
         });
     }

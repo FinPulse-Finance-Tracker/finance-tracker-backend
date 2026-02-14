@@ -5,32 +5,36 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('categories')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)  // All routes protected
 export class CategoriesController {
     constructor(private readonly categoriesService: CategoriesService) { }
-
-    @Post()
-    create(@Request() req, @Body() createCategoryDto: CreateCategoryDto) {
-        return this.categoriesService.create(req.user.id, createCategoryDto);
-    }
 
     @Get()
     findAll(@Request() req) {
         return this.categoriesService.findAll(req.user.id);
     }
 
+    @Post()
+    create(@Request() req, @Body() createCategoryDto: CreateCategoryDto) {
+        return this.categoriesService.create(req.user.id, createCategoryDto);
+    }
+
     @Get(':id')
     findOne(@Request() req, @Param('id') id: string) {
-        return this.categoriesService.findOne(req.user.id, id);
+        return this.categoriesService.findOne(id, req.user.id);
     }
 
     @Patch(':id')
-    update(@Request() req, @Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
-        return this.categoriesService.update(req.user.id, id, updateCategoryDto);
+    update(
+        @Request() req,
+        @Param('id') id: string,
+        @Body() updateCategoryDto: UpdateCategoryDto,
+    ) {
+        return this.categoriesService.update(id, req.user.id, updateCategoryDto);
     }
 
     @Delete(':id')
     remove(@Request() req, @Param('id') id: string) {
-        return this.categoriesService.remove(req.user.id, id);
+        return this.categoriesService.remove(id, req.user.id);
     }
 }

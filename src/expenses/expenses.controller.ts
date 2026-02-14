@@ -1,12 +1,22 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
+import {
+    Controller,
+    Get,
+    Post,
+    Body,
+    Patch,
+    Param,
+    Delete,
+    UseGuards,
+    Request,
+    Query,
+} from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
-import { QueryExpenseDto } from './dto/query-expense.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('expenses')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard) // All routes protected
 export class ExpensesController {
     constructor(private readonly expensesService: ExpensesService) { }
 
@@ -16,40 +26,45 @@ export class ExpensesController {
     }
 
     @Get()
-    findAll(@Request() req, @Query() queryDto: QueryExpenseDto) {
-        return this.expensesService.findAll(req.user.id, queryDto);
+    findAll(
+        @Request() req,
+        @Query('categoryId') categoryId?: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+    ) {
+        return this.expensesService.findAll(
+            req.user.id,
+            categoryId,
+            startDate,
+            endDate,
+        );
     }
 
-    @Get('statistics')
-    getStatistics(
+    @Get('stats')
+    getStats(
         @Request() req,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
     ) {
-        return this.expensesService.getStatistics(req.user.id, startDate, endDate);
-    }
-
-    @Get('total')
-    getTotalSpending(
-        @Request() req,
-        @Query('startDate') startDate?: string,
-        @Query('endDate') endDate?: string,
-    ) {
-        return this.expensesService.getTotalSpending(req.user.id, startDate, endDate);
+        return this.expensesService.getStats(req.user.id, startDate, endDate);
     }
 
     @Get(':id')
     findOne(@Request() req, @Param('id') id: string) {
-        return this.expensesService.findOne(req.user.id, id);
+        return this.expensesService.findOne(id, req.user.id);
     }
 
     @Patch(':id')
-    update(@Request() req, @Param('id') id: string, @Body() updateExpenseDto: UpdateExpenseDto) {
-        return this.expensesService.update(req.user.id, id, updateExpenseDto);
+    update(
+        @Request() req,
+        @Param('id') id: string,
+        @Body() updateExpenseDto: UpdateExpenseDto,
+    ) {
+        return this.expensesService.update(id, req.user.id, updateExpenseDto);
     }
 
     @Delete(':id')
     remove(@Request() req, @Param('id') id: string) {
-        return this.expensesService.remove(req.user.id, id);
+        return this.expensesService.remove(id, req.user.id);
     }
 }

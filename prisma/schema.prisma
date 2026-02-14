@@ -36,7 +36,7 @@ model User {
 // Category Model
 model Category {
   id           String   @id @default(uuid())
-  userId       String
+  userId       String?  // Optional for default categories
   name         String
   icon         String?
   color        String?
@@ -45,7 +45,7 @@ model Category {
   createdAt    DateTime @default(now())
 
   // Relations
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   expenses        Expense[]
   budgets         Budget[]
   recommendations AIRecommendation[]
@@ -66,6 +66,7 @@ model Expense {
   receiptUrl    String?
   isRecurring   Boolean  @default(false)
   source        String?  // 'manual', 'email', 'receipt'
+  notes         String?
   emailId       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

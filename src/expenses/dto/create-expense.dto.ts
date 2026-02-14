@@ -1,32 +1,26 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsDateString, IsBoolean, IsUUID } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsNumber, IsDateString, IsOptional, Min } from 'class-validator';
 
 export class CreateExpenseDto {
     @IsNumber()
     @Min(0)
     amount: number;
 
-    @IsDateString()
+    @IsString()
     @IsNotEmpty()
+    description: string;
+
+    @IsString()
+    @IsNotEmpty()
+    categoryId: string;
+
+    @IsDateString()
     date: string;
 
+    @IsString()
     @IsOptional()
-    @IsUUID()
-    categoryId?: string;
+    notes?: string;
 
     @IsString()
     @IsOptional()
-    description?: string;
-
-    @IsString()
-    @IsOptional()
-    merchant?: string;
-
-    @IsString()
-    @IsOptional()
-    paymentMethod?: string;
-
-    @IsBoolean()
-    @IsOptional()
-    isRecurring?: boolean;
+    receiptUrl?: string;
 }
