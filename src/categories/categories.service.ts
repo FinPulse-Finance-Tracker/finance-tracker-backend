@@ -29,6 +29,20 @@ export class CategoriesService {
 
         // Single grouped query instead of N+1 per-category aggregates
         const categoryIds = categories.map(c => c.id);
+
+        // Fetch user-specific budgets for these categories
+        const userBudgets = await this.prisma.budget.findMany({
+            where: {
+                userId,
+                categoryId: { in: categoryIds },
+                period: 'monthly', // Assuming monthly budgets for now
+            },
+        });
+
+        const budgetMap = new Map(
+            userBudgets.map(b => [b.categoryId, Number(b.amount || 0)])
+        );
+
         const spending = await this.prisma.expense.groupBy({
             by: ['categoryId'],
             where: {
@@ -48,10 +62,17 @@ export class CategoriesService {
             spending.map(s => [s.categoryId, Number(s._sum.amount || 0)]),
         );
 
-        const categoriesWithStats = categories.map(category => ({
-            ...category,
-            monthlySpent: spendingMap.get(category.id) || 0,
-        }));
+        const categoriesWithStats = categories.map(category => {
+            // Use user-specific budget if available, otherwise fallback to default
+            const userBudget = budgetMap.get(category.id);
+            const budgetAmount = userBudget !== undefined ? userBudget : Number(category.budgetAmount || 0);
+
+            return {
+                ...category,
+                budgetAmount, // Override with user budget
+                monthlySpent: spendingMap.get(category.id) || 0,
+            };
+        });
 
         return categoriesWithStats;
     }
@@ -89,7 +110,9 @@ export class CategoriesService {
     async update(id: string, userId: string, updateCategoryDto: UpdateCategoryDto) {
         const category = await this.findOne(id, userId);
 
-        // Removed: ForbiddenException for default categories
+        if (category.isDefault) {
+            throw new ForbiddenException('Cannot modify system categories');
+        }
 
         return this.prisma.category.update({
             where: { id },
@@ -101,7 +124,9 @@ export class CategoriesService {
     async remove(id: string, userId: string) {
         const category = await this.findOne(id, userId);
 
-        // Removed: ForbiddenException for default categories
+        if (category.isDefault) {
+            throw new ForbiddenException('Cannot delete system categories');
+        }
 
         return this.prisma.category.delete({
             where: { id },
