@@ -27,29 +27,31 @@ export class CategoriesService {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-        // Fetch spending for each category
-        const categoriesWithStats = await Promise.all(
-            categories.map(async (category) => {
-                const spending = await this.prisma.expense.aggregate({
-                    where: {
-                        userId,
-                        categoryId: category.id,
-                        date: {
-                            gte: startOfMonth,
-                            lte: endOfMonth,
-                        },
-                    },
-                    _sum: {
-                        amount: true,
-                    },
-                });
+        // Single grouped query instead of N+1 per-category aggregates
+        const categoryIds = categories.map(c => c.id);
+        const spending = await this.prisma.expense.groupBy({
+            by: ['categoryId'],
+            where: {
+                userId,
+                categoryId: { in: categoryIds },
+                date: {
+                    gte: startOfMonth,
+                    lte: endOfMonth,
+                },
+            },
+            _sum: {
+                amount: true,
+            },
+        });
 
-                return {
-                    ...category,
-                    monthlySpent: Number(spending._sum.amount || 0),
-                };
-            }),
+        const spendingMap = new Map(
+            spending.map(s => [s.categoryId, Number(s._sum.amount || 0)]),
         );
+
+        const categoriesWithStats = categories.map(category => ({
+            ...category,
+            monthlySpent: spendingMap.get(category.id) || 0,
+        }));
 
         return categoriesWithStats;
     }

@@ -31,12 +31,16 @@ export class ExpensesController {
         @Query('categoryId') categoryId?: string,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
     ) {
         return this.expensesService.findAll(
             req.user.id,
             categoryId,
             startDate,
             endDate,
+            page ? parseInt(page, 10) : 1,
+            limit ? parseInt(limit, 10) : 50,
         );
     }
 

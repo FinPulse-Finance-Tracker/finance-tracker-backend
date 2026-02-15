@@ -21,12 +21,14 @@ export class ExpensesService {
         });
     }
 
-    // Get all user expenses with optional filters
+    // Get all user expenses with optional filters and pagination
     async findAll(
         userId: string,
         categoryId?: string,
         startDate?: string,
         endDate?: string,
+        page: number = 1,
+        limit: number = 50,
     ) {
         const where: any = { userId };
 
@@ -44,15 +46,30 @@ export class ExpensesService {
             }
         }
 
-        return this.prisma.expense.findMany({
-            where,
-            include: {
-                category: true,
-            },
-            orderBy: {
-                date: 'desc',
-            },
-        });
+        const skip = (page - 1) * limit;
+
+        const [expenses, total] = await Promise.all([
+            this.prisma.expense.findMany({
+                where,
+                include: {
+                    category: true,
+                },
+                orderBy: {
+                    date: 'desc',
+                },
+                take: limit,
+                skip,
+            }),
+            this.prisma.expense.count({ where }),
+        ]);
+
+        return {
+            data: expenses,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
     }
 
     // Get single expense
@@ -103,7 +120,7 @@ export class ExpensesService {
         });
     }
 
-    // Get spending statistics
+    // Get spending statistics using DB-level aggregation
     async getStats(userId: string, startDate?: string, endDate?: string) {
         const where: any = { userId };
 
@@ -117,38 +134,60 @@ export class ExpensesService {
             }
         }
 
-        const expenses = await this.prisma.expense.findMany({
-            where,
-            include: {
-                category: true,
-            },
-        });
+        // Run all queries in parallel at the database level
+        const [totals, byCategoryRaw, recentExpenses] = await Promise.all([
+            // Total and count via aggregate
+            this.prisma.expense.aggregate({
+                where,
+                _sum: { amount: true },
+                _count: true,
+            }),
+            // Per-category breakdown via groupBy
+            this.prisma.expense.groupBy({
+                by: ['categoryId'],
+                where,
+                _sum: { amount: true },
+                _count: true,
+            }),
+            // Recent 5 expenses
+            this.prisma.expense.findMany({
+                where,
+                include: { category: true },
+                orderBy: { date: 'desc' },
+                take: 5,
+            }),
+        ]);
 
-        // Calculate total - convert Decimal to number
-        const total = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+        // Fetch category details for the grouped results
+        const categoryIds = byCategoryRaw
+            .map(item => item.categoryId)
+            .filter((id): id is string => id !== null);
 
-        // Calculate by category
-        const byCategory = expenses.reduce((acc, expense) => {
-            if (!expense.category) return acc; // Skip if no category
+        const categories = categoryIds.length > 0
+            ? await this.prisma.category.findMany({
+                where: { id: { in: categoryIds } },
+            })
+            : [];
 
-            const categoryName = expense.category.name;
-            if (!acc[categoryName]) {
-                acc[categoryName] = {
-                    total: 0,
-                    count: 0,
-                    color: expense.category.color,
-                };
-            }
-            acc[categoryName].total += Number(expense.amount); // Convert Decimal to number
-            acc[categoryName].count += 1;
-            return acc;
-        }, {} as Record<string, { total: number; count: number; color: string | null }>);
+        const categoryMap = new Map(categories.map(c => [c.id, c]));
+
+        const byCategory: Record<string, { total: number; count: number; color: string | null }> = {};
+        for (const item of byCategoryRaw) {
+            if (!item.categoryId) continue;
+            const cat = categoryMap.get(item.categoryId);
+            if (!cat) continue;
+            byCategory[cat.name] = {
+                total: Number(item._sum.amount || 0),
+                count: item._count,
+                color: cat.color,
+            };
+        }
 
         return {
-            total,
-            count: expenses.length,
+            total: Number(totals._sum.amount || 0),
+            count: totals._count,
             byCategory,
-            expenses: expenses.slice(0, 5), // Recent 5 expenses
+            expenses: recentExpenses,
         };
     }
 }

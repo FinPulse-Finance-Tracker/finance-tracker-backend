@@ -26,25 +26,26 @@ export class ClerkAuthGuard implements CanActivate {
                 throw new UnauthorizedException('Invalid token');
             }
 
-            // Get user from Clerk using the userId from token
-            const clerkUser = await clerkClient.users.getUser(payload.sub);
+            // Fast path: look up existing user by clerkId (indexed query, no external API call)
+            let dbUser = await this.clerkSyncService.getUserByClerkId(payload.sub);
 
-            // **AUTO-SYNC: Find or create user in database**
-            const dbUser = await this.clerkSyncService.syncUserFromClerk({
-                id: clerkUser.id,
-                emailAddresses: clerkUser.emailAddresses,
-                firstName: clerkUser.firstName || undefined,
-                lastName: clerkUser.lastName || undefined,
-                imageUrl: clerkUser.imageUrl,
-            });
-
-            console.log('✅ User synced:', dbUser.email, 'DB ID:', dbUser.id);
+            if (!dbUser) {
+                // First-time user only: do full Clerk sync
+                const clerkUser = await clerkClient.users.getUser(payload.sub);
+                dbUser = await this.clerkSyncService.syncUserFromClerk({
+                    id: clerkUser.id,
+                    emailAddresses: clerkUser.emailAddresses,
+                    firstName: clerkUser.firstName || undefined,
+                    lastName: clerkUser.lastName || undefined,
+                    imageUrl: clerkUser.imageUrl,
+                });
+            }
 
             // Attach user to request (using database user ID)
             request.user = {
-                id: dbUser.id,        // Database user ID
+                id: dbUser.id,
                 clerkId: payload.sub,
-                email: clerkUser.emailAddresses[0]?.emailAddress || '',
+                email: dbUser.email,
             };
 
             return true;
