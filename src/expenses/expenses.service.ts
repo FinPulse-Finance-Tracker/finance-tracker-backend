@@ -42,7 +42,9 @@ export class ExpensesService {
                 where.date.gte = new Date(startDate);
             }
             if (endDate) {
-                where.date.lte = new Date(endDate);
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                where.date.lte = end;
             }
         }
 
@@ -130,7 +132,9 @@ export class ExpensesService {
                 where.date.gte = new Date(startDate);
             }
             if (endDate) {
-                where.date.lte = new Date(endDate);
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                where.date.lte = end;
             }
         }
 
