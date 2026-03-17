@@ -40,7 +40,7 @@ export class ExpensesController {
             startDate,
             endDate,
             page ? parseInt(page, 10) : 1,
-            limit ? parseInt(limit, 10) : 50,
+            limit ? parseInt(limit, 10) : 200,
         );
     }
 
