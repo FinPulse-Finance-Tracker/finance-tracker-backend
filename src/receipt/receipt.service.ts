@@ -1,7 +1,9 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as tesseract from 'tesseract.js';
-const pdfParse = require('pdf-parse');
+// NOTE: pdf-parse is NOT imported at the top level.
+// It is dynamically imported inside processFile() to avoid crashing
+// Vercel serverless functions which don't support DOMMatrix at startup.
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -30,7 +32,10 @@ export class ReceiptService {
 
         try {
             if (mimeType.includes('pdf')) {
-                // Parse PDF
+                // Lazy require (inside function body) so pdf-parse is NOT loaded at
+                // module startup — avoids the DOMMatrix crash in Vercel serverless.
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const pdfParse = require('pdf-parse');
                 const data = await pdfParse(file.buffer);
                 rawText = data.text;
             } else if (mimeType.includes('image')) {
