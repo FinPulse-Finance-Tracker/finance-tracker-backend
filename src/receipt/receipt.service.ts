@@ -35,8 +35,13 @@ export class ReceiptService {
                 // Lazy require (inside function body) so pdf-parse is NOT loaded at
                 // module startup — avoids the DOMMatrix crash in Vercel serverless.
                 // eslint-disable-next-line @typescript-eslint/no-var-requires
-                const pdfParse = require('pdf-parse');
-                const data = await pdfParse(file.buffer);
+                require('pdf-parse/worker');
+                const { PDFParse } = require('pdf-parse');
+
+                const parser = new PDFParse({ data: file.buffer });
+                const data = await parser.getText();
+                await parser.destroy();
+
                 rawText = data.text;
             } else if (mimeType.includes('image')) {
                 // Parse Image via OCR (Tesseract)
