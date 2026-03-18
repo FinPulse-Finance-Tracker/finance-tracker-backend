@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import express from 'express';
 
 const expressApp = express();
@@ -19,6 +20,9 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
     }));
+
+    // Register global exception filter
+    app.useGlobalFilters(new AllExceptionsFilter());
 
     // Enable CORS
     app.enableCors({

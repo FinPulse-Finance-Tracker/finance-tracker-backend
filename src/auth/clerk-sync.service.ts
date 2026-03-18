@@ -26,30 +26,38 @@ export class ClerkSyncService {
             ? `${clerkUser.firstName} ${clerkUser.lastName}`
             : clerkUser.firstName || null;
 
-        // Check if user already exists with this clerkId
+        // 1. Check if user already exists with this clerkId
         let user = await this.prisma.user.findUnique({
             where: { clerkId: clerkUser.id },
         });
 
+        // 2. If not found by clerkId, check if they exist by email (Legacy/Pre-sync users)
+        if (!user && email) {
+            user = await this.prisma.user.findUnique({
+                where: { email },
+            });
+        }
+
         if (user) {
-            // Update existing user (in case profile changed)
+            // Update existing user (link clerkId if it was missing, or update profile)
             user = await this.prisma.user.update({
-                where: { clerkId: clerkUser.id },
+                where: { id: user.id }, // Use internal ID for update
                 data: {
+                    clerkId: clerkUser.id, // Ensure clerkId is linked
                     email,
                     name,
                     profilePicture: clerkUser.imageUrl,
                 },
             });
         } else {
-            // Create new user
+            // 3. Create new user if neither clerkId nor email exists
             user = await this.prisma.user.create({
                 data: {
                     clerkId: clerkUser.id,
                     email,
                     name,
                     profilePicture: clerkUser.imageUrl,
-                    passwordHash: null, // OAuth users don't have passwords
+                    passwordHash: null,
                 },
             });
 

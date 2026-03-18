@@ -23,9 +23,16 @@ export class GmailController {
     @Get('connect')
     @UseGuards(ClerkAuthGuard)
     async connect(@Request() req) {
-        const state = req.user.id; // use user's DB id as state
-        const authUrl = this.gmailService.getAuthUrl(state);
-        return { authUrl };
+        try {
+            console.log('🔗 Initiating Gmail connection for user:', req.user.id);
+            const state = req.user.id; // use user's DB id as state
+            const authUrl = this.gmailService.getAuthUrl(state);
+            console.log('✅ Successfully generated Auth URL');
+            return { authUrl };
+        } catch (error) {
+            console.error('❌ Failed to initiate Gmail connection:', error.message);
+            throw error;
+        }
     }
 
     /**

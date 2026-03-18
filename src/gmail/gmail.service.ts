@@ -24,24 +24,41 @@ export class GmailService {
     ) { }
 
     private getOAuth2Client() {
-        return new google.auth.OAuth2(
-            this.config.get('GOOGLE_CLIENT_ID'),
-            this.config.get('GOOGLE_CLIENT_SECRET'),
-            this.config.get('GOOGLE_REDIRECT_URI'),
-        );
+        const clientId = this.config.get('GOOGLE_CLIENT_ID');
+        const clientSecret = this.config.get('GOOGLE_CLIENT_SECRET');
+        const redirectUri = this.config.get('GOOGLE_REDIRECT_URI');
+
+        if (!clientId || !clientSecret || !redirectUri) {
+            console.error('❌ Missing Google OAuth configuration:', {
+                clientId: !!clientId,
+                clientSecret: !!clientSecret,
+                redirectUri: !!redirectUri,
+            });
+            throw new Error('Google OAuth configuration is incomplete');
+        }
+
+        return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     }
 
     /**
      * Generate the Google OAuth authorization URL
      */
     getAuthUrl(state: string): string {
-        const oauth2Client = this.getOAuth2Client();
-        return oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: this.SCOPES,
-            state,
-            prompt: 'consent', // Force refresh token on each connect
-        });
+        try {
+            console.log('🏗️ Generating Google Auth URL for state:', state);
+            const oauth2Client = this.getOAuth2Client();
+            const url = oauth2Client.generateAuthUrl({
+                access_type: 'offline',
+                scope: this.SCOPES,
+                state,
+                prompt: 'consent',
+            });
+            console.log('🌐 Generated Google Auth URL:', url);
+            return url;
+        } catch (error) {
+            console.error('❌ Error in getAuthUrl:', error.message);
+            throw error;
+        }
     }
 
     /**
@@ -133,7 +150,9 @@ export class GmailService {
 
         // Refresh token if needed
         oauth2Client.on('tokens', async (tokens) => {
+            console.log('🔄 Received new tokens from Google');
             if (tokens.access_token) {
+                console.log('✅ Updating Access Token in database');
                 await this.prisma.emailConnection.update({
                     where: { id: connection.id },
                     data: { accessToken: tokens.access_token },
@@ -141,64 +160,83 @@ export class GmailService {
             }
         });
 
-        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-
-        // Search for bill/receipt style emails from the last 60 days
-        const sixtyDaysAgo = Math.floor((Date.now() - 60 * 24 * 60 * 60 * 1000) / 1000);
-        const query = `after:${sixtyDaysAgo} (subject:(bill OR receipt OR invoice OR order OR payment OR transaction OR "order confirmation" OR "payment confirmation" OR "payment received"))`;
-
-        const listRes = await gmail.users.messages.list({
-            userId: 'me',
-            q: query,
-            maxResults: 50,
-        });
-
-        const messages = listRes.data.messages || [];
-
-        // Fetch full details for each message and extract expenses
-        const extractedExpenses: ExtractedExpense[] = [];
-        const alreadyImportedIds = new Set(
-            (await this.prisma.expense.findMany({
-                where: { userId, source: 'email', emailId: { not: null } },
-                select: { emailId: true },
-            })).map(e => e.emailId)
-        );
-
-        for (const msg of messages) {
-            if (!msg.id || alreadyImportedIds.has(msg.id)) continue;
-
-            try {
-                const full = await gmail.users.messages.get({
-                    userId: 'me',
-                    id: msg.id,
-                    format: 'full',
-                });
-
-                const headers = full.data.payload?.headers || [];
-                const subject = headers.find(h => h.name === 'Subject')?.value || '';
-                const from = headers.find(h => h.name === 'From')?.value || '';
-                const dateHeader = headers.find(h => h.name === 'Date')?.value || '';
-
-                // Get email body text
-                const body = this.extractBody(full.data.payload);
-
-                // Extract expense info
-                const extracted = this.parseExpenseFromEmail(subject, from, dateHeader, body, msg.id);
-                if (extracted) {
-                    extractedExpenses.push(extracted);
-                }
-            } catch {
-                // Skip emails that fail to parse
+        try {
+            // Explicitly refresh the token to check if it's still valid
+            console.log('🔑 Checking/Refreshing Access Token...');
+            const { token } = await oauth2Client.getAccessToken();
+            if (!token) {
+                console.error('❌ Failed to get access token - refresh token might be invalid or revoked');
+                throw new Error('Unauthorized: Refresh token invalid or revoked');
             }
+
+            const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+            // Search for bill/receipt style emails from the last 60 days
+            const sixtyDaysAgo = Math.floor((Date.now() - 60 * 24 * 60 * 60 * 1000) / 1000);
+            const query = `after:${sixtyDaysAgo} (subject:(bill OR receipt OR invoice OR order OR payment OR transaction OR "order confirmation" OR "payment confirmation" OR "payment received"))`;
+
+            console.log('🔍 Searching Gmail messages with query:', query);
+            const listRes = await gmail.users.messages.list({
+                userId: 'me',
+                q: query,
+                maxResults: 50,
+            });
+
+            const messages = listRes.data.messages || [];
+            console.log(`📨 Found ${messages.length} potential email matches`);
+
+            // Fetch full details for each message and extract expenses
+            const extractedExpenses: ExtractedExpense[] = [];
+            const alreadyImportedIds = new Set(
+                (await this.prisma.expense.findMany({
+                    where: { userId, source: 'email', emailId: { not: null } },
+                    select: { emailId: true },
+                })).map(e => e.emailId)
+            );
+
+            for (const msg of messages) {
+                if (!msg.id || alreadyImportedIds.has(msg.id)) continue;
+
+                try {
+                    const full = await gmail.users.messages.get({
+                        userId: 'me',
+                        id: msg.id,
+                        format: 'full',
+                    });
+
+                    const headers = full.data.payload?.headers || [];
+                    const subject = headers.find(h => h.name === 'Subject')?.value || '';
+                    const from = headers.find(h => h.name === 'From')?.value || '';
+                    const dateHeader = headers.find(h => h.name === 'Date')?.value || '';
+
+                    // Get email body text
+                    const body = this.extractBody(full.data.payload);
+
+                    // Extract expense info
+                    const extracted = this.parseExpenseFromEmail(subject, from, dateHeader, body, msg.id);
+                    if (extracted) {
+                        extractedExpenses.push(extracted);
+                    }
+                } catch {
+                    // Skip emails that fail to parse
+                }
+            }
+
+            // Update last synced time
+            await this.prisma.emailConnection.update({
+                where: { id: connection.id },
+                data: { lastSynced: new Date() },
+            });
+
+            console.log(`✅ Sync completed: Extracted ${extractedExpenses.length} expenses`);
+            return extractedExpenses;
+        } catch (error) {
+            console.error('❌ Gmail sync failed:', error.message);
+            if (error.response) {
+                console.error('API Error details:', JSON.stringify(error.response.data, null, 2));
+            }
+            throw error;
         }
-
-        // Update last synced time
-        await this.prisma.emailConnection.update({
-            where: { id: connection.id },
-            data: { lastSynced: new Date() },
-        });
-
-        return extractedExpenses;
     }
 
     /**
