@@ -51,7 +51,10 @@ export class ClerkAuthGuard implements CanActivate {
             return true;
         } catch (error) {
             console.error('❌ Clerk auth error:', error.message);
-            throw new UnauthorizedException('Invalid or expired token');
+            if (error.stack) {
+                console.error('Stack trace:', error.stack);
+            }
+            throw new UnauthorizedException(`Invalid or expired token: ${error.message}`);
         }
     }
 }
