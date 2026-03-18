@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as tesseract from 'tesseract.js';
+// tesseract.js is NOT imported at the top level to save on cold-start time.
 // NOTE: pdf-parse is NOT imported at the top level.
 // It is dynamically imported inside processFile() to avoid crashing
 // Vercel serverless functions which don't support DOMMatrix at startup.
@@ -39,10 +39,11 @@ export class ReceiptService {
                 rawText = data.text;
             } else if (mimeType.includes('image')) {
                 // Parse Image via OCR (Tesseract)
+                // Lazy-load tesseract.js only when needed to speed up app cold starts
+                const tesseract = require('tesseract.js');
                 const { data: { text } } = await tesseract.recognize(
                     file.buffer,
                     'eng',
-                    // tesseract.js automatically handles standard logger configurations in v5+
                 );
                 rawText = text;
             } else {
