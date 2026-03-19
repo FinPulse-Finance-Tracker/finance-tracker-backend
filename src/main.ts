@@ -25,9 +25,24 @@ async function bootstrap() {
     app.useGlobalFilters(new AllExceptionsFilter());
 
     // Enable CORS
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://finance-tracker-frontend-mu.vercel.app',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
     app.enableCors({
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`⚠️ CORS blocked for origin: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      allowedHeaders: 'Content-Type, Accept, Authorization',
     });
 
     await app.init();
