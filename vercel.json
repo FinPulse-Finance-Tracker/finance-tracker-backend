@@ -1,15 +1,19 @@
 {
     "version": 2,
-    "functions": {
-        "api/main.ts": {
-            "memory": 1024,
-            "maxDuration": 10
+    "builds": [
+        {
+            "src": "src/main.ts",
+            "use": "@vercel/node",
+            "config": {
+                "memory": 1024,
+                "maxDuration": 10
+            }
         }
-    },
+    ],
     "routes": [
         {
             "src": "/(.*)",
-            "dest": "api/main.ts",
+            "dest": "src/main.ts",
             "methods": [
                 "GET",
                 "POST",
