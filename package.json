@@ -23,6 +23,7 @@
   "dependencies": {
     "@clerk/backend": "^0.38.15",
     "@clerk/clerk-sdk-node": "^4.13.23",
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
