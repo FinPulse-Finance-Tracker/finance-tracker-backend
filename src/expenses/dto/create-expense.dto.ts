@@ -24,21 +24,4 @@ export class CreateExpenseDto {
     @IsOptional()
     receiptUrl?: string;
 
-    @IsBoolean()
-    @IsOptional()
-    isRecurring?: boolean;
-
-    @IsString()
-    @IsOptional()
-    @IsIn(['daily', 'weekly', 'monthly', 'yearly'])
-    recurringInterval?: string;
-
-    @IsDateString()
-    @IsOptional()
-    nextRecurringDate?: string;
-
-    @IsString()
-    @IsOptional()
-    @IsIn(['active', 'inactive'])
-    recurringStatus?: string;
 }

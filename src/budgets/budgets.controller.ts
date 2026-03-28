@@ -7,6 +7,7 @@ import {
     Post,
     UseGuards,
     Request,
+    Query,
 } from '@nestjs/common';
 import { BudgetsService } from './budgets.service';
 import { SetBudgetDto } from './dto/set-budget.dto';
@@ -18,13 +19,31 @@ export class BudgetsController {
     constructor(private readonly budgetsService: BudgetsService) { }
 
     @Get()
-    getBudgets(@Request() req) {
-        return this.budgetsService.getBudgets(req.user.id);
+    getBudgets(
+        @Request() req,
+        @Query('month') month?: string,
+        @Query('year') year?: string
+    ) {
+        return this.budgetsService.getBudgets(
+            req.user.id,
+            month ? parseInt(month, 10) : undefined,
+            year ? parseInt(year, 10) : undefined
+        );
     }
 
     @Post()
-    setBudget(@Request() req, @Body() setBudgetDto: SetBudgetDto) {
-        return this.budgetsService.setBudget(req.user.id, setBudgetDto);
+    setBudget(
+        @Request() req, 
+        @Body() setBudgetDto: SetBudgetDto,
+        @Query('month') month?: string,
+        @Query('year') year?: string
+    ) {
+        return this.budgetsService.setBudget(
+            req.user.id, 
+            setBudgetDto,
+            month ? parseInt(month, 10) : undefined,
+            year ? parseInt(year, 10) : undefined
+        );
     }
 
     @Delete(':id')
@@ -36,7 +55,9 @@ export class BudgetsController {
     getBudgetSuggestions(
         @Request() req,
         @Param('categoryId') categoryId: string,
+        @Query('location') location?: string,
+        @Query('shoppingType') shoppingType?: string,
     ) {
-        return this.budgetsService.getBudgetSuggestions(req.user.id, categoryId);
+        return this.budgetsService.getBudgetSuggestions(req.user.id, categoryId, location, shoppingType);
     }
 }

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsOptional, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsOptional, Min, IsBoolean, IsArray } from 'class-validator';
 
 export class SetBudgetDto {
     @IsNotEmpty()
@@ -13,4 +13,13 @@ export class SetBudgetDto {
     @IsOptional()
     @IsString()
     period?: string; // e.g., 'monthly'
+
+    @IsOptional()
+    @IsBoolean()
+    isRecurring?: boolean;
+
+    @IsOptional()
+    @IsArray()
+    @IsNumber({}, { each: true })
+    recurringMonths?: number[];
 }

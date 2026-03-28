@@ -68,8 +68,10 @@ export class GmailController {
      */
     @Post('sync')
     @UseGuards(ClerkAuthGuard)
-    async sync(@Request() req) {
-        const expenses = await this.gmailService.syncEmails(req.user.id);
+    async sync(@Request() req, @Body() body: { startDate?: string, endDate?: string }) {
+        const targetDate = body.startDate ? new Date(body.startDate) : undefined;
+        const targetEndDate = body.endDate ? new Date(body.endDate) : undefined;
+        const expenses = await this.gmailService.syncEmails(req.user.id, targetDate, targetEndDate);
         return { expenses, count: expenses.length };
     }
 

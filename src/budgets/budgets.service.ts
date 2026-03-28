@@ -6,23 +6,23 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SetBudgetDto } from './dto/set-budget.dto';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 @Injectable()
 export class BudgetsService {
-    private genAI: GoogleGenerativeAI | null = null;
+    private openai: OpenAI | null = null;
 
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
     ) {
-        const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+        const apiKey = this.configService.get<string>('OPENAI_API_KEY');
         if (apiKey) {
-            this.genAI = new GoogleGenerativeAI(apiKey);
+            this.openai = new OpenAI({ apiKey });
         }
     }
 
-    async setBudget(userId: string, dto: SetBudgetDto) {
+    async setBudget(userId: string, dto: SetBudgetDto, targetMonth?: number, targetYear?: number) {
         // Verify category exists
         const category = await this.prisma.category.findUnique({
             where: { id: dto.categoryId },
@@ -32,22 +32,36 @@ export class BudgetsService {
             throw new NotFoundException('Category not found');
         }
 
+        const now = new Date();
+        const year = targetYear ?? now.getFullYear();
+        const month = targetMonth !== undefined ? targetMonth : now.getMonth();
+
+        const periodStart = new Date(year, month, 1, 0, 0, 0, 0);
+        const periodEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
         const existingBudget = await this.prisma.budget.findFirst({
             where: {
                 userId,
                 categoryId: dto.categoryId,
                 period: dto.period || 'monthly',
+                startDate: {
+                    gte: periodStart,
+                    lte: periodEnd
+                }
             },
         });
 
-        const startDate = new Date();
-        startDate.setDate(1); // Start of this month
+        const startDate = new Date(year, month, 1, 0, 0, 0, 0);
 
         if (existingBudget) {
             return this.prisma.budget.update({
                 where: { id: existingBudget.id },
                 data: {
                     amount: dto.amount,
+                    isRecurring: dto.isRecurring !== undefined ? dto.isRecurring : existingBudget.isRecurring,
+                    recurringMonths: dto.recurringMonths ? JSON.stringify(dto.recurringMonths) : existingBudget.recurringMonths,
+                    nextRecurringDate: dto.isRecurring ? new Date(year, month + 1, 1, 0, 0, 0, 0) : null,
+                    recurringStatus: dto.isRecurring ? 'active' : 'inactive',
                 },
             });
         } else {
@@ -58,29 +72,140 @@ export class BudgetsService {
                     amount: dto.amount,
                     period: dto.period || 'monthly',
                     startDate: startDate,
+                    isRecurring: dto.isRecurring || false,
+                    recurringMonths: dto.recurringMonths ? JSON.stringify(dto.recurringMonths) : null,
+                    nextRecurringDate: dto.isRecurring ? new Date(year, month + 1, 1, 0, 0, 0, 0) : null,
+                    recurringStatus: dto.isRecurring ? 'active' : 'inactive',
                 },
             });
         }
     }
 
-    async getBudgets(userId: string) {
+    async getBudgets(userId: string, targetMonth?: number, targetYear?: number) {
         const now = new Date();
+        const year = targetYear ?? now.getFullYear();
+        const month = targetMonth !== undefined ? targetMonth : now.getMonth();
 
         // Get date range for current period (monthly by default)
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-            23,
-            59,
-            59,
-            999,
-        );
+        const startOfMonth = new Date(year, month, 1);
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
-        // Fetch all budgets for this user with their categories
+        // --- LAZY GENERATION LOGIC ---
+        const pendingRecurringBudgets = await this.prisma.budget.findMany({
+            where: {
+                userId,
+                isRecurring: true,
+                recurringStatus: 'active',
+                nextRecurringDate: {
+                    lte: endOfMonth,
+                },
+            },
+        });
+
+        for (const b of pendingRecurringBudgets) {
+            if (!b.nextRecurringDate) continue;
+
+            let nextDate = new Date(b.nextRecurringDate);
+            let currentBudgetIdToDeactivate = b.id;
+            let currentBudgetAmount = b.amount;
+
+            while (nextDate.getTime() <= endOfMonth.getTime()) {
+                const genYear = nextDate.getFullYear();
+                const genMonth = nextDate.getMonth();
+                const genStart = new Date(genYear, genMonth, 1);
+                const nextNextDate = new Date(genYear, genMonth + 1, 1);
+
+                // Check if target generation month already has a budget for this category
+                const existing = await this.prisma.budget.findFirst({
+                    where: {
+                        userId,
+                        categoryId: b.categoryId,
+                        startDate: {
+                            gte: genStart,
+                            lte: new Date(genYear, genMonth + 1, 0, 23, 59, 59, 999)
+                        }
+                    }
+                });
+
+                let shouldCreate = true;
+                if (b.recurringMonths) {
+                    try {
+                        const parsedMonths = JSON.parse(b.recurringMonths);
+                        if (Array.isArray(parsedMonths) && parsedMonths.length > 0) {
+                            if (!parsedMonths.includes(genMonth)) {
+                                shouldCreate = false;
+                            }
+                        }
+                    } catch (e) {
+                        // ignore parse errors
+                    }
+                }
+
+                if (!existing && shouldCreate) {
+                    // Deactivate old baton
+                    await this.prisma.budget.update({
+                        where: { id: currentBudgetIdToDeactivate },
+                        data: { recurringStatus: 'inactive', nextRecurringDate: null }
+                    });
+
+                    const created = await this.prisma.budget.create({
+                        data: {
+                            userId,
+                            categoryId: b.categoryId,
+                            amount: currentBudgetAmount,
+                            period: b.period,
+                            startDate: genStart,
+                            isRecurring: true,
+                            recurringMonths: b.recurringMonths,
+                            nextRecurringDate: nextNextDate,
+                            recurringStatus: 'active'
+                        }
+                    });
+                    currentBudgetIdToDeactivate = created.id;
+                } else if (existing) {
+                    // Deactivate old baton if different
+                    if (currentBudgetIdToDeactivate !== existing.id) {
+                        await this.prisma.budget.update({
+                            where: { id: currentBudgetIdToDeactivate },
+                            data: { recurringStatus: 'inactive', nextRecurringDate: null }
+                        });
+                    }
+
+                    // If a budget somehow got manually created in the middle of a skipped sequence, it takes the baton!
+                    const updated = await this.prisma.budget.update({
+                        where: { id: existing.id },
+                        data: {
+                            isRecurring: true,
+                            recurringMonths: b.recurringMonths,
+                            nextRecurringDate: nextNextDate,
+                            recurringStatus: 'active'
+                        }
+                    });
+                    currentBudgetIdToDeactivate = updated.id;
+                    currentBudgetAmount = updated.amount; // update the amount carried forward if it changed manually
+                } else {
+                    // !existing && !shouldCreate -> Skipped month!
+                    // Advance the baton on the CURRENT carrier without creating a new record
+                    await this.prisma.budget.update({
+                        where: { id: currentBudgetIdToDeactivate },
+                        data: { nextRecurringDate: nextNextDate }
+                    });
+                }
+
+                nextDate = nextNextDate;
+            }
+        }
+        // --- END LAZY GENERATION ---
+
+        // Fetch all budgets for this user for the specific month
         const budgets = await this.prisma.budget.findMany({
-            where: { userId },
+            where: { 
+                userId,
+                startDate: {
+                    gte: startOfMonth,
+                    lte: endOfMonth
+                }
+            },
             include: {
                 category: true,
             },
@@ -94,16 +219,25 @@ export class BudgetsService {
                 let periodEnd: Date;
 
                 if (budget.period === 'weekly') {
-                    const dayOfWeek = now.getDay();
-                    periodStart = new Date(now);
-                    periodStart.setDate(now.getDate() - dayOfWeek);
-                    periodStart.setHours(0, 0, 0, 0);
-                    periodEnd = new Date(periodStart);
-                    periodEnd.setDate(periodStart.getDate() + 6);
-                    periodEnd.setHours(23, 59, 59, 999);
+                    // For weekly budgets, if observing past month, we might want to just show the whole month
+                    // or respect the standard weekly logic but offset. For simplicity, we just use month logic if history is selected,
+                    // but we'll try to use standard weekly if it's the current month.
+                    if (targetMonth === undefined || (targetMonth === now.getMonth() && targetYear === now.getFullYear())) {
+                        const dayOfWeek = now.getDay();
+                        periodStart = new Date(now);
+                        periodStart.setDate(now.getDate() - dayOfWeek);
+                        periodStart.setHours(0, 0, 0, 0);
+                        periodEnd = new Date(periodStart);
+                        periodEnd.setDate(periodStart.getDate() + 6);
+                        periodEnd.setHours(23, 59, 59, 999);
+                    } else {
+                        // Fallback to monthly view for past weekly budgets to give a snapshot
+                        periodStart = startOfMonth;
+                        periodEnd = endOfMonth;
+                    }
                 } else if (budget.period === 'yearly') {
-                    periodStart = new Date(now.getFullYear(), 0, 1);
-                    periodEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+                    periodStart = new Date(year, 0, 1);
+                    periodEnd = new Date(year, 11, 31, 23, 59, 59, 999);
                 } else {
                     // monthly (default)
                     periodStart = startOfMonth;
@@ -184,7 +318,7 @@ export class BudgetsService {
         });
     }
 
-    async getBudgetSuggestions(userId: string, categoryId: string) {
+    async getBudgetSuggestions(userId: string, categoryId: string, location?: string, shoppingType?: string) {
         // Get category info
         const category = await this.prisma.category.findUnique({
             where: { id: categoryId },
@@ -209,16 +343,16 @@ export class BudgetsService {
             select: { merchant: true, amount: true, description: true },
         });
 
-        // If no Gemini API key, return hardcoded suggestions
-        if (!this.genAI) {
-            return this.getFallbackSuggestions(category.name);
+        // If no OpenAI API key, return empty suggestions
+        if (!this.openai) {
+            return {
+                category: category.name,
+                budgetAmount,
+                suggestions: [],
+            };
         }
 
         try {
-            const model = this.genAI.getGenerativeModel({
-                model: 'gemini-2.0-flash',
-            });
-
             const merchantContext =
                 recentExpenses.length > 0
                     ? `Recent spending: ${recentExpenses
@@ -229,10 +363,19 @@ export class BudgetsService {
                         .join(', ')}`
                     : 'No recent spending data.';
 
+            const locationContext = location ? `specifically in or near ${location}` : `in Sri Lanka`;
+            
+            let shoppingTypeContext = '';
+            // Only apply shopping type if the category suggests shopping-related activities (Shopping, Groceries, etc)
+            if (shoppingType && ["shopping", "groceries", "food", "dining", "entertainment"].includes(category.name.toLowerCase())) {
+                shoppingTypeContext = `The user is specifically looking for suggestions related to: ${shoppingType}.`;
+            }
+
             const prompt = `You are a smart financial advisor for Sri Lanka. The user has a ${budget?.period || 'monthly'} budget of ${budgetAmount ? `LKR ${budgetAmount.toLocaleString()}` : 'unspecified amount'} for "${category.name}".
 ${merchantContext}
+${shoppingTypeContext}
 
-Suggest 5 specific places, stores, or services in Sri Lanka where the user can spend wisely in the "${category.name}" category. For each suggestion, provide:
+Suggest 5 specific places, stores, or services ${locationContext} where the user can spend wisely in the "${category.name}" category. For each suggestion, provide:
 - name: The place/store name
 - tip: A short tip on how to save money there (1 sentence)  
 - estimatedSaving: Approximate percentage they could save
@@ -240,8 +383,13 @@ Suggest 5 specific places, stores, or services in Sri Lanka where the user can s
 Return ONLY valid JSON array, no markdown, no code blocks:
 [{"name":"...", "tip":"...", "estimatedSaving":"..."}]`;
 
-            const result = await model.generateContent(prompt);
-            const text = result.response.text().trim();
+            const response = await this.openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+            });
+
+            const text = response.choices[0]?.message?.content?.trim() ?? '';
 
             // Parse the JSON from the response
             const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -254,106 +402,18 @@ Return ONLY valid JSON array, no markdown, no code blocks:
                 };
             }
 
-            return this.getFallbackSuggestions(category.name);
+            return {
+                category: category.name,
+                budgetAmount,
+                suggestions: [],
+            };
         } catch (error) {
-            console.error('Gemini API error:', error);
-            return this.getFallbackSuggestions(category.name);
+            console.error('OpenAI API error:', error);
+            return {
+                category: category.name,
+                budgetAmount,
+                suggestions: [],
+            };
         }
-    }
-
-    private getFallbackSuggestions(categoryName: string) {
-        const fallbacks: Record<
-            string,
-            Array<{ name: string; tip: string; estimatedSaving: string }>
-        > = {
-            Food: [
-                {
-                    name: 'Keells Super',
-                    tip: 'Use their loyalty card for extra discounts on weekends',
-                    estimatedSaving: '10-15%',
-                },
-                {
-                    name: 'Arpico Supercenter',
-                    tip: 'Buy in bulk for household staples to save more',
-                    estimatedSaving: '12-18%',
-                },
-                {
-                    name: 'Laugfs Supermarket',
-                    tip: 'Check weekly promotions every Wednesday',
-                    estimatedSaving: '8-12%',
-                },
-                {
-                    name: 'Local Pola (Market)',
-                    tip: 'Fresh vegetables and fruits at wholesale prices',
-                    estimatedSaving: '20-30%',
-                },
-                {
-                    name: 'Cargills FoodCity',
-                    tip: 'Use the FoodCity app for digital coupons',
-                    estimatedSaving: '5-10%',
-                },
-            ],
-            Transport: [
-                {
-                    name: 'PickMe / Uber',
-                    tip: 'Compare both apps before booking — prices vary by time',
-                    estimatedSaving: '10-20%',
-                },
-                {
-                    name: 'Sri Lanka Railways',
-                    tip: 'Book 2nd class for comfortable long-distance travel at low cost',
-                    estimatedSaving: '50-70%',
-                },
-                {
-                    name: 'SLTB Bus Service',
-                    tip: 'Use express buses for faster commute with AC comfort',
-                    estimatedSaving: '60-80%',
-                },
-                {
-                    name: 'Lanka IOC / Ceylon Petroleum',
-                    tip: 'Track fuel prices and fill up on discount days',
-                    estimatedSaving: '3-5%',
-                },
-                {
-                    name: 'Carpooling',
-                    tip: 'Share rides with colleagues for daily commute savings',
-                    estimatedSaving: '40-50%',
-                },
-            ],
-        };
-
-        const suggestions = fallbacks[categoryName] || [
-            {
-                name: 'Shop around',
-                tip: 'Compare prices at 3 different stores before purchasing',
-                estimatedSaving: '10-15%',
-            },
-            {
-                name: 'Use loyalty programs',
-                tip: 'Sign up for store loyalty cards to earn points and discounts',
-                estimatedSaving: '5-10%',
-            },
-            {
-                name: 'Buy during sales',
-                tip: 'Wait for seasonal sales and promotional events',
-                estimatedSaving: '15-30%',
-            },
-            {
-                name: 'Use digital coupons',
-                tip: 'Download store apps for exclusive digital discounts',
-                estimatedSaving: '5-12%',
-            },
-            {
-                name: 'Bulk purchases',
-                tip: 'Buy frequently used items in bulk for better unit prices',
-                estimatedSaving: '10-20%',
-            },
-        ];
-
-        return {
-            category: categoryName,
-            budgetAmount: null,
-            suggestions,
-        };
     }
 }

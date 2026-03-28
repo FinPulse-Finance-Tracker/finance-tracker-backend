@@ -65,10 +65,6 @@ model Expense {
   date          DateTime
   paymentMethod String?
   receiptUrl    String?
-  isRecurring   Boolean   @default(false)
-  recurringInterval String? // 'daily', 'weekly', 'monthly', 'yearly'
-  nextRecurringDate DateTime?
-  recurringStatus   String? // 'active', 'inactive'
   source        String?   // 'manual', 'email', 'receipt', 'recurring_job'
   notes         String?
   emailId       String?
@@ -81,7 +77,6 @@ model Expense {
 
   @@index([userId, date])
   @@index([categoryId])
-  @@index([isRecurring, recurringStatus, nextRecurringDate])
   @@map("expenses")
 }
 
@@ -90,11 +85,15 @@ model Budget {
   id         String   @id @default(uuid())
   userId     String
   categoryId String
-  amount     Decimal  @db.Decimal(12, 2)
-  period     String   @default("monthly") // 'monthly', 'weekly', 'yearly'
-  startDate  DateTime
-  endDate    DateTime?
-  createdAt  DateTime @default(now())
+  amount          Decimal  @db.Decimal(12, 2)
+  period          String   @default("monthly") // 'monthly', 'weekly', 'yearly'
+  startDate       DateTime
+  endDate         DateTime?
+  isRecurring     Boolean  @default(false)
+  recurringMonths String?  // e.g. "[0,2,5]" for Jan, Mar, Jun
+  nextRecurringDate DateTime?
+  recurringStatus String?  // 'active', 'inactive'
+  createdAt       DateTime @default(now())
 
   // Relations
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -10,7 +10,6 @@ export class ExpenseDto {
     date: Date;
     paymentMethod?: string;
     receiptUrl?: string;
-    isRecurring: boolean;
     source?: string;
     emailId?: string;
     createdAt: Date;
