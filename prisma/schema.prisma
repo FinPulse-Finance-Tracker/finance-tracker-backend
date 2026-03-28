@@ -6,23 +6,23 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 // User Model
 model User {
-  id            String   @id @default(uuid())
-  clerkId       String?  @unique // Clerk User ID for OAuth users
-  email         String   @unique
-  passwordHash  String?  // Optional - only for email/password users
-  name          String?
+  id             String   @id @default(uuid())
+  clerkId        String?  @unique // Clerk User ID for OAuth users
+  email          String   @unique
+  passwordHash   String? // Optional - only for email/password users
+  name           String?
   profilePicture String? // Profile picture URL from Clerk/OAuth
-  currency      String   @default("LKR")
-  monthlyIncome Decimal? @db.Decimal(12, 2)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  currency       String   @default("LKR")
+  monthlyIncome  Decimal? @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
   categories       Category[]
@@ -30,6 +30,7 @@ model User {
   budgets          Budget[]
   recommendations  AIRecommendation[]
   emailConnections EmailConnection[]
+  feedbacks        Feedback[]
 
   @@map("users")
 }
@@ -37,7 +38,7 @@ model User {
 // Category Model
 model Category {
   id           String   @id @default(uuid())
-  userId       String?  // Optional for default categories
+  userId       String? // Optional for default categories
   name         String
   icon         String?
   color        String?
@@ -65,11 +66,11 @@ model Expense {
   date          DateTime
   paymentMethod String?
   receiptUrl    String?
-  source        String?   // 'manual', 'email', 'receipt', 'recurring_job'
+  source        String? // 'manual', 'email', 'receipt', 'recurring_job'
   notes         String?
   emailId       String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -82,18 +83,18 @@ model Expense {
 
 // Budget Model
 model Budget {
-  id         String   @id @default(uuid())
-  userId     String
-  categoryId String
-  amount          Decimal  @db.Decimal(12, 2)
-  period          String   @default("monthly") // 'monthly', 'weekly', 'yearly'
-  startDate       DateTime
-  endDate         DateTime?
-  isRecurring     Boolean  @default(false)
-  recurringMonths String?  // e.g. "[0,2,5]" for Jan, Mar, Jun
+  id                String    @id @default(uuid())
+  userId            String
+  categoryId        String
+  amount            Decimal   @db.Decimal(12, 2)
+  period            String    @default("monthly") // 'monthly', 'weekly', 'yearly'
+  startDate         DateTime
+  endDate           DateTime?
+  isRecurring       Boolean   @default(false)
+  recurringMonths   String? // e.g. "[0,2,5]" for Jan, Mar, Jun
   nextRecurringDate DateTime?
-  recurringStatus String?  // 'active', 'inactive'
-  createdAt       DateTime @default(now())
+  recurringStatus   String? // 'active', 'inactive'
+  createdAt         DateTime  @default(now())
 
   // Relations
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -108,7 +109,7 @@ model AIRecommendation {
   id               String   @id @default(uuid())
   userId           String
   categoryId       String?
-  type             String   // 'budget', 'merchant', 'savings', 'alternative'
+  type             String // 'budget', 'merchant', 'savings', 'alternative'
   title            String
   description      String
   savingsPotential Decimal? @db.Decimal(12, 2)
@@ -128,7 +129,7 @@ model EmailConnection {
   id           String    @id @default(uuid())
   userId       String
   emailAddress String
-  provider     String    // 'gmail', 'outlook'
+  provider     String // 'gmail', 'outlook'
   accessToken  String
   refreshToken String
   isActive     Boolean   @default(true)
@@ -140,4 +141,19 @@ model EmailConnection {
 
   @@index([userId, isActive])
   @@map("email_connections")
+}
+
+// User Feedback Model
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  rating    Int?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("feedbacks")
 }

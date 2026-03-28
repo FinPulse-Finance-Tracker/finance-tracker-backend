@@ -9,7 +9,9 @@ import {
     UseGuards,
     Request,
     Query,
+    Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
@@ -51,6 +53,19 @@ export class ExpensesController {
         @Query('endDate') endDate?: string,
     ) {
         return this.expensesService.getStats(req.user.id, startDate, endDate);
+    }
+
+    @Get('export')
+    async exportCsv(@Request() req, @Res() res: Response) {
+        const csv = await this.expensesService.exportCsv(req.user.id);
+        res.header('Content-Type', 'text/csv');
+        res.attachment('finpulse_expenses.csv');
+        return res.send(csv);
+    }
+
+    @Delete('wipe-all')
+    wipeAllData(@Request() req) {
+        return this.expensesService.wipeAllData(req.user.id);
     }
 
     @Get(':id')

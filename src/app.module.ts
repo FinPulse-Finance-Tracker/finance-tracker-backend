@@ -11,6 +11,7 @@ import { SmsModule } from './sms/sms.module';
 import { ReceiptModule } from './receipt/receipt.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AppService } from './app.service';
     GmailModule,
     SmsModule,
     ReceiptModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService],

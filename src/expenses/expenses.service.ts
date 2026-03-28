@@ -126,13 +126,43 @@ export class ExpensesService {
         });
     }
 
-    // Delete expense
     async remove(id: string, userId: string) {
         await this.findOne(id, userId);
 
         return this.prisma.expense.delete({
             where: { id },
         });
+    }
+
+    async exportCsv(userId: string): Promise<string> {
+        const expenses = await this.prisma.expense.findMany({
+            where: { userId },
+            include: { category: true },
+            orderBy: { date: 'desc' },
+        });
+
+        const header = ['Date', 'Merchant', 'Description', 'Category', 'Amount', 'Payment Method', 'Source'];
+        const rows = expenses.map(exp => [
+            exp.date.toISOString().split('T')[0],
+            `"${(exp.merchant || '').replace(/"/g, '""')}"`,
+            `"${(exp.description || '').replace(/"/g, '""')}"`,
+            `"${(exp.category?.name || 'Uncategorized').replace(/"/g, '""')}"`,
+            exp.amount,
+            `"${(exp.paymentMethod || '').replace(/"/g, '""')}"`,
+            `"${(exp.source || 'manual').replace(/"/g, '""')}"`,
+        ]);
+
+        return [header.join(','), ...rows.map(row => row.join(','))].join('\n');
+    }
+
+    async wipeAllData(userId: string) {
+        await this.prisma.$transaction([
+            this.prisma.expense.deleteMany({ where: { userId } }),
+            this.prisma.budget.deleteMany({ where: { userId } }),
+            this.prisma.category.deleteMany({ where: { userId } }),
+            this.prisma.aIRecommendation.deleteMany({ where: { userId } }),
+        ]);
+        return { success: true, message: 'All personal data wiped successfully.' };
     }
 
     // Get spending statistics using DB-level aggregation
