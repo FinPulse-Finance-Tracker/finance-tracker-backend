@@ -1,18 +1,7 @@
-import {
-    Controller,
-    Get,
-    Post,
-    Body,
-    Patch,
-    Param,
-    Delete,
-    UseGuards,
-    Request,
-    Query,
-    Res,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query, Res, UseInterceptors } from '@nestjs/common';
 import type { Response } from 'express';
 import { ExpensesService } from './expenses.service';
+import { UserCacheInterceptor } from '../common/interceptors/user-cache.interceptor';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
@@ -23,11 +12,12 @@ export class ExpensesController {
     constructor(private readonly expensesService: ExpensesService) { }
 
     @Post()
-    create(@Request() req, @Body() createExpenseDto: CreateExpenseDto) {
+    async create(@Request() req, @Body() createExpenseDto: CreateExpenseDto) {
         return this.expensesService.create(req.user.id, createExpenseDto);
     }
 
     @Get()
+    @UseInterceptors(UserCacheInterceptor)
     findAll(
         @Request() req,
         @Query('categoryId') categoryId?: string,
@@ -47,6 +37,7 @@ export class ExpensesController {
     }
 
     @Get('stats')
+    @UseInterceptors(UserCacheInterceptor)
     getStats(
         @Request() req,
         @Query('startDate') startDate?: string,
@@ -64,7 +55,7 @@ export class ExpensesController {
     }
 
     @Delete('wipe-all')
-    wipeAllData(@Request() req) {
+    async wipeAllData(@Request() req) {
         return this.expensesService.wipeAllData(req.user.id);
     }
 
@@ -74,7 +65,7 @@ export class ExpensesController {
     }
 
     @Patch(':id')
-    update(
+    async update(
         @Request() req,
         @Param('id') id: string,
         @Body() updateExpenseDto: UpdateExpenseDto,
@@ -83,7 +74,7 @@ export class ExpensesController {
     }
 
     @Delete(':id')
-    remove(@Request() req, @Param('id') id: string) {
+    async remove(@Request() req, @Param('id') id: string) {
         return this.expensesService.remove(id, req.user.id);
     }
 }

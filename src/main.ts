@@ -28,6 +28,7 @@ async function bootstrap() {
     const allowedOrigins = [
       'http://localhost:5173',
       'https://finance-tracker-frontend-mu.vercel.app',
+      'https://finpulse.nethmihapuarachchi.com',
       process.env.FRONTEND_URL
     ].filter(Boolean);
 

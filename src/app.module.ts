@@ -12,6 +12,7 @@ import { ReceiptModule } from './receipt/receipt.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FeedbackModule } from './feedback/feedback.module';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -19,6 +20,10 @@ import { FeedbackModule } from './feedback/feedback.module';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 30000, // 30 seconds default TTL to prevent stale data
+    }),
     PrismaModule,
     AuthModule,
     CategoriesModule,

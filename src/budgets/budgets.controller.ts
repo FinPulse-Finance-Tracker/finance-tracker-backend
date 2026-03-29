@@ -8,8 +8,10 @@ import {
     UseGuards,
     Request,
     Query,
+    UseInterceptors
 } from '@nestjs/common';
 import { BudgetsService } from './budgets.service';
+import { UserCacheInterceptor } from '../common/interceptors/user-cache.interceptor';
 import { SetBudgetDto } from './dto/set-budget.dto';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 
@@ -19,6 +21,7 @@ export class BudgetsController {
     constructor(private readonly budgetsService: BudgetsService) { }
 
     @Get()
+    @UseInterceptors(UserCacheInterceptor)
     getBudgets(
         @Request() req,
         @Query('month') month?: string,
