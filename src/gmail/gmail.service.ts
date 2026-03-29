@@ -187,7 +187,7 @@ export class GmailService {
             
             const queryAfterSeconds = Math.floor(checkDateStart.getTime() / 1000);
             const queryBeforeSeconds = Math.floor(checkDateEnd.getTime() / 1000);
-            const query = `after:${queryAfterSeconds} before:${queryBeforeSeconds} (subject:(bill OR receipt OR invoice OR order OR payment OR transaction OR "order confirmation" OR "payment confirmation" OR "payment received"))`;
+            const query = `after:${queryAfterSeconds} before:${queryBeforeSeconds} category:purchases`;
 
             console.log('🔍 Searching Gmail messages with query:', query);
             const listRes = await gmail.users.messages.list({

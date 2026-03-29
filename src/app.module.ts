@@ -7,13 +7,13 @@ import { CategoriesModule } from './categories/categories.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { BudgetsModule } from './budgets/budgets.module';
 import { GmailModule } from './gmail/gmail.module';
-import { SmsModule } from './sms/sms.module';
 import { ReceiptModule } from './receipt/receipt.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FeedbackModule } from './feedback/feedback.module';
 import { CacheModule } from '@nestjs/cache-manager';
-
+import { MailModule } from './mail/mail.module';
+import { CronModule } from './cron/cron.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -30,9 +30,10 @@ import { CacheModule } from '@nestjs/cache-manager';
     ExpensesModule,
     BudgetsModule,
     GmailModule,
-    SmsModule,
     ReceiptModule,
     FeedbackModule,
+    MailModule,
+    CronModule,
   ],
   controllers: [AppController],
   providers: [AppService],
