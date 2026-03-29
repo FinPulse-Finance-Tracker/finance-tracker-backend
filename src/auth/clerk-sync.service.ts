@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
+import { MailService } from '../mail/mail.service';
 
 interface ClerkUser {
     id: string; // Clerk ID
@@ -12,9 +13,12 @@ interface ClerkUser {
 
 @Injectable()
 export class ClerkSyncService {
+    private readonly logger = new Logger(ClerkSyncService.name);
+
     constructor(
         private prisma: PrismaService,
         private categoriesService: CategoriesService,
+        private mailService: MailService,
     ) { }
 
     /**
@@ -63,6 +67,13 @@ export class ClerkSyncService {
 
             // Seed default categories for new user
             await this.categoriesService.seedDefaultCategories(user.id);
+
+            // Alert admin of new user registration
+            try {
+                await this.mailService.sendAdminNewUserAlert(email, name || 'Unknown Name');
+            } catch (error) {
+                this.logger.error('Failed to send admin new user alert email', error);
+            }
         }
 
         return user;

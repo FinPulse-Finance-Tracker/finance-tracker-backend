@@ -63,6 +63,38 @@ export class MailService {
         }
     }
 
+    async sendAdminNewUserAlert(newUserEmail: string, newUserName: string) {
+        if (!this.transporter) return;
+        
+        const adminEmail = this.configService.get<string>('SMTP_USER');
+        if (!adminEmail) return;
+
+        const subject = '🎉 New User Signup - Finance Tracker';
+        const html = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #6a1b9a;">New User Registration!</h2>
+                <p>A new user has just signed up for Finance Tracker.</p>
+                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0 0 10px 0;"><strong>Name:</strong> ${newUserName}</p>
+                    <p style="margin: 0;"><strong>Email:</strong> ${newUserEmail}</p>
+                </div>
+                <p>Log in to your admin dashboard to view new analytics.</p>
+            </div>
+        `;
+
+        try {
+            await this.transporter.sendMail({
+                from: `"Finance Tracker System" <${this.configService.get<string>('SMTP_USER')}>`,
+                to: adminEmail,
+                subject,
+                html,
+            });
+            this.logger.log(`Admin alert sent for new user: ${newUserEmail}`);
+        } catch (error: any) {
+            this.logger.error(`Error sending admin alert: ${error.message}`);
+        }
+    }
+
     private getGoogleCalendarLink(): string {
         const text = encodeURIComponent('Log Daily Expenses - Finance Tracker');
         const details = encodeURIComponent('Friendly reminder to add your daily expenses in the Finance Tracker. Log them here: https://finpulse.nethmihapuarachchi.com/');
