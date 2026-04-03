@@ -21,7 +21,10 @@ export class GmailService {
      * This allows only filter/settings management — cannot read inbox content.
      * Far less invasive, users see "Manage Gmail settings" on consent screen.
      */
-    private readonly SCOPES = ['https://www.googleapis.com/auth/gmail.settings.basic'];
+    private readonly SCOPES = [
+        'https://www.googleapis.com/auth/gmail.settings.basic',
+        'https://www.googleapis.com/auth/gmail.settings.sharing'
+    ];
 
     constructor(
         private prisma: PrismaService,
