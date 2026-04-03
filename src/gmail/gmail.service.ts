@@ -141,9 +141,10 @@ export class GmailService {
             // If address already exists (code 409), continue
             if (err?.code !== 409) {
                 this.logger.error(`❌ Failed to add forwarding address: ${err.message}`);
-                throw err;
+                // Don't throw, let the user manually verify if needed
+            } else {
+                this.logger.log(`ℹ️ Forwarding address already exists`);
             }
-            this.logger.log(`ℹ️ Forwarding address already exists`);
         }
 
         try {
@@ -169,8 +170,8 @@ export class GmailService {
                 data: { forwardingActive: true },
             });
         } catch (err: any) {
-            this.logger.error(`❌ Failed to create Gmail filter: ${err.message}`);
-            throw err;
+            this.logger.error(`❌ Failed to create Gmail filter: ${err.message}. The forwarding address may need to be manually verified first.`);
+            // Don't throw, we still connected the account successfully
         }
     }
 
