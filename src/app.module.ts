@@ -14,6 +14,9 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { MailModule } from './mail/mail.module';
 import { CronModule } from './cron/cron.module';
+import { EmailIngestModule } from './email-ingest/email-ingest.module';
+import { UserModule } from './user/user.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -34,6 +37,8 @@ import { CronModule } from './cron/cron.module';
     FeedbackModule,
     MailModule,
     CronModule,
+    EmailIngestModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],

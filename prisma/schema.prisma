@@ -19,10 +19,12 @@ model User {
   passwordHash   String? // Optional - only for email/password users
   name           String?
   profilePicture String? // Profile picture URL from Clerk/OAuth
-  currency       String   @default("LKR")
-  monthlyIncome  Decimal? @db.Decimal(12, 2)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  currency          String   @default("LKR")
+  monthlyIncome     Decimal? @db.Decimal(12, 2)
+  forwardingAddress String?  @unique // e.g. receipts-abc123@receipts.yourapp.com
+  forwardingActive  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
   categories       Category[]
