@@ -150,8 +150,8 @@ export class GmailService {
                 userId: 'me',
                 requestBody: {
                     criteria: {
-                        // Match purchase-related emails using Gmail's built-in category or keywords
-                        query: 'category:purchases OR (subject:(receipt OR "order confirmation" OR "order placed" OR invoice OR payment OR bill) -in:spam)',
+                        // Match ONLY emails in Gmail's built-in Purchases category as requested by user
+                        query: 'category:purchases',
                     },
                     action: {
                         forward: forwardingAddress,
