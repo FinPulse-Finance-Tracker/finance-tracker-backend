@@ -8,7 +8,17 @@ import {
     BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmailIngestService, IngestPayload } from './email-ingest.service';
+import { EmailIngestService } from './email-ingest.service';
+
+export class IngestPayload {
+    forwardingShortId: string;
+    subject: string;
+    from: string;
+    fromName?: string;
+    text?: string;
+    html?: string;
+    date?: string;
+}
 
 @Controller('email-ingest')
 export class EmailIngestController {
