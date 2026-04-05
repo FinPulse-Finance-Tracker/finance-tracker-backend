@@ -6,6 +6,7 @@ import {
     convertToLKR,
 } from '../common/expense-parser.util';
 import * as crypto from 'crypto';
+import { GmailService } from '../gmail/gmail.service';
 
 export interface IngestPayload {
     forwardingShortId: string; // first 10 chars (no dashes) of user UUID, from the "To" address
@@ -21,7 +22,10 @@ export interface IngestPayload {
 export class EmailIngestService {
     private readonly logger = new Logger(EmailIngestService.name);
 
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly gmailService: GmailService
+    ) {}
 
     /**
      * Resolve a user from their forwarding address shortId.
@@ -35,6 +39,22 @@ export class EmailIngestService {
             where: { forwardingAddress: fullAddress },
             select: { id: true, forwardingActive: true },
         });
+    }
+
+    /**
+     * Final step: Cloudflare worker notifies us that the forward address is verified.
+     * We look up the user and trigger GmailService to create the forwarding rule.
+     */
+    async verifyAndCreateFilter(shortId: string) {
+        const user = await this.resolveUserByShortId(shortId);
+        if (!user) {
+            this.logger.warn(`⚠️ Cannot verify forwarding for unknown shortId=${shortId}`);
+            return false;
+        }
+
+        this.logger.log(`🔗 Webhook triggered: Verifying forwarding and creating filter for user ${user.id}`);
+        await this.gmailService.finalizeForwardingVerification(user.id);
+        return true;
     }
 
     async processEmail(payload: IngestPayload) {

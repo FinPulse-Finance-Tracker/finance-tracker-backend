@@ -150,6 +150,42 @@ export class GmailService {
             }
         }
 
+        // We wait for verification before creating the filter.
+        // The Cloudflare Worker will trigger finalizeForwardingVerification via the webhook.
+    }
+
+    /**
+     * Called by EmailIngestService webhook AFTER the Cloudflare worker auto-verifies
+     * the forwarding address. Creates the required Gmail filter.
+     */
+    async finalizeForwardingVerification(userId: string) {
+        // Look up emailConnection to get the tokens
+        const connection = await this.prisma.emailConnection.findFirst({
+            where: { userId, provider: 'gmail_forwarding', isActive: true },
+        });
+
+        if (!connection || !connection.accessToken) {
+            throw new Error('Gmail forwarding connection not active or missing tokens');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { forwardingAddress: true },
+        });
+
+        const forwardingAddress = user?.forwardingAddress;
+        if (!forwardingAddress) {
+            throw new Error('User does not have a forwarding address');
+        }
+
+        const oauth2Client = this.getOAuth2Client();
+        oauth2Client.setCredentials({
+            access_token: connection.accessToken,
+            refresh_token: connection.refreshToken,
+        });
+
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
         try {
             // Step 2: Create filter for purchase/receipt emails
             this.logger.log(`🔧 Creating Gmail filter to forward purchase emails`);
@@ -157,7 +193,6 @@ export class GmailService {
                 userId: 'me',
                 requestBody: {
                     criteria: {
-                        // Match ONLY emails in Gmail's built-in Purchases category as requested by user
                         query: 'category:purchases',
                     },
                     action: {
@@ -173,8 +208,7 @@ export class GmailService {
                 data: { forwardingActive: true },
             });
         } catch (err: any) {
-            this.logger.error(`❌ Failed to create Gmail filter: ${err.message}. The forwarding address may need to be manually verified first.`);
-            // Don't throw, we still connected the account successfully
+            this.logger.error(`❌ Failed to create Gmail filter during verification: ${err.message}`);
         }
     }
 

@@ -67,11 +67,15 @@ export class EmailIngestController {
     @Post('verify-forwarding')
     async verifyForwarding(
         @Headers('x-ingest-secret') secret: string,
-        @Body() body: { verificationClicked: boolean },
+        @Body() body: { verificationClicked: boolean; forwardingShortId?: string },
     ) {
         const expected = this.config.get<string>('EMAIL_INGEST_SECRET');
         if (!expected || secret !== expected) {
             throw new UnauthorizedException('Invalid ingest secret');
+        }
+
+        if (body.forwardingShortId) {
+            await this.emailIngestService.verifyAndCreateFilter(body.forwardingShortId);
         }
 
         this.logger.log(`✅ Gmail forwarding verification confirmed by worker`);
