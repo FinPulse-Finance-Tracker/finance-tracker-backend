@@ -88,7 +88,21 @@ export function parseExpenseFromEmail(
     body: string,
     messageId: string,
 ): ExtractedExpense | null {
-    const text = `${subject} ${body}`.replace(/<[^>]*>/g, ' ');
+    let finalFrom = from;
+    let finalDateHeader = dateHeader;
+    let finalSubject = subject;
+
+    // Handle manually forwarded emails (Gmail format)
+    if (body.includes('Forwarded message')) {
+        const fwBlockMatch = body.match(/Forwarded message[\s\S]*?From:\s*([^\n]+)[\s\S]*?Date:\s*([^\n]+)[\s\S]*?Subject:\s*([^\n]+)/i);
+        if (fwBlockMatch) {
+            finalFrom = fwBlockMatch[1].trim();
+            finalDateHeader = fwBlockMatch[2].trim();
+            finalSubject = fwBlockMatch[3].trim();
+        }
+    }
+
+    const text = `${finalSubject} ${body}`.replace(/<[^>]*>/g, ' ');
 
     const amountPatterns = [
         { regex: /(USD|\$|€|£|A\$|AUD|Rs\.?|LKR|lkr)\s*:?\s*([\d,]+(?:\.\d{1,2})?)/gi, currIdx: 1, amtIdx: 2 },
@@ -118,15 +132,15 @@ export function parseExpenseFromEmail(
 
     if (amount === null) return null;
 
-    const merchantMatch = from.match(/^"?([^"<@]+)"?\s*</);
-    const merchant = (merchantMatch?.[1] || from.split('@')[0] || from)
+    const merchantMatch = finalFrom.match(/^"?([^"<@]+)"?\s*</);
+    const merchant = (merchantMatch?.[1] || finalFrom.split('@')[0] || finalFrom)
         .trim()
         .replace(/^(no-?reply[-_]?)*/i, '')
         .trim() || 'Unknown';
 
     let date = new Date();
-    if (dateHeader) {
-        const parsed = new Date(dateHeader);
+    if (finalDateHeader) {
+        const parsed = new Date(finalDateHeader);
         if (!isNaN(parsed.getTime())) date = parsed;
     }
 
