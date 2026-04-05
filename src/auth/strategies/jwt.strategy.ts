@@ -48,8 +48,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             try {
                 const clerkUser = await this.clerkClient.users.getUser(payload.sub);
                 console.log('Clerk User fetched:', clerkUser.id, clerkUser.emailAddresses[0]?.emailAddress);
-                user = await this.clerkSyncService.syncUserFromClerk(clerkUser as any);
-                console.log('Auto-sync successful. New User ID:', user.id);
+                const syncResult = await this.clerkSyncService.syncUserFromClerk(clerkUser as any);
+                user = syncResult.user;
+                console.log('Auto-sync successful. New User ID:', user?.id);
             } catch (error) {
                 console.error('Failed to auto-sync Clerk user:', error);
                 throw new UnauthorizedException('User registration failed or user not found in Clerk.');

@@ -43,6 +43,9 @@ export class ClerkSyncService {
         }
 
         if (user) {
+            // Capture the previous lastLoginAt before overwriting it
+            const previousLastLoginAt = user.lastLoginAt ?? null;
+
             // Update existing user (link clerkId if it was missing, or update profile)
             user = await this.prisma.user.update({
                 where: { id: user.id }, // Use internal ID for update
@@ -51,8 +54,11 @@ export class ClerkSyncService {
                     email,
                     name,
                     profilePicture: clerkUser.imageUrl,
+                    lastLoginAt: new Date(),
                 },
             });
+
+            return { user, previousLastLoginAt };
         } else {
             // 3. Create new user if neither clerkId nor email exists
             user = await this.prisma.user.create({
@@ -62,6 +68,7 @@ export class ClerkSyncService {
                     name,
                     profilePicture: clerkUser.imageUrl,
                     passwordHash: null,
+                    lastLoginAt: new Date(),
                 },
             });
 
@@ -74,9 +81,10 @@ export class ClerkSyncService {
             } catch (error) {
                 this.logger.error('Failed to send admin new user alert email', error);
             }
-        }
 
-        return user;
+            // First-ever login: no previous session, so no email imports to notify about
+            return { user, previousLastLoginAt: null };
+        }
     }
 
     /**

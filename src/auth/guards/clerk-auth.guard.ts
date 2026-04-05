@@ -37,13 +37,14 @@ export class ClerkAuthGuard implements CanActivate {
             if (!dbUser) {
                 // First-time user only: do full Clerk sync
                 const clerkUser = await clerkClient.users.getUser(payload.sub);
-                dbUser = await this.clerkSyncService.syncUserFromClerk({
+                const syncResult = await this.clerkSyncService.syncUserFromClerk({
                     id: clerkUser.id,
                     emailAddresses: clerkUser.emailAddresses,
                     firstName: clerkUser.firstName || undefined,
                     lastName: clerkUser.lastName || undefined,
                     imageUrl: clerkUser.imageUrl,
                 });
+                dbUser = syncResult.user;
             }
 
             // Attach user to request (using database user ID)

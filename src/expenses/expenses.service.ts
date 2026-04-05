@@ -233,8 +233,47 @@ export class ExpensesService {
                 expenses: recentExpenses,
             };
         } catch (error) {
-            this.logger.error(`❌ Error in getStats for user ${userId}:`, error.message);
+            this.logger.error(`Error in getStats for user ${userId}:`, error.message);
             throw error;
         }
     }
+
+    /**
+     * Get email-imported expenses created after a given timestamp.
+     * Used to notify the user about auto-imports that happened while they were away.
+     */
+    async getNewEmailExpensesSinceLastLogin(
+        userId: string,
+        since: Date | null,
+    ): Promise<{ count: number; total: number; expenses: any[] }> {
+        if (!since) {
+            return { count: 0, total: 0, expenses: [] };
+        }
+
+        const expenses = await this.prisma.expense.findMany({
+            where: {
+                userId,
+                source: 'email',
+                createdAt: { gt: since },
+            },
+            include: { category: true },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
+        return { count: expenses.length, total, expenses };
+    }
+
+    /**
+     * Helper to get user's lastLoginAt
+     */
+    async getUserLastLoginAt(userId: string) {
+        return this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { lastLoginAt: true }
+        });
+    }
 }
+
+

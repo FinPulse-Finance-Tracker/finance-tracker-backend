@@ -23,6 +23,7 @@ model User {
   monthlyIncome     Decimal? @db.Decimal(12, 2)
   forwardingAddress String?  @unique // e.g. receipts-abc123@receipts.yourapp.com
   forwardingActive  Boolean  @default(false)
+  lastLoginAt       DateTime? // Stamped on every login — used to detect new email imports
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

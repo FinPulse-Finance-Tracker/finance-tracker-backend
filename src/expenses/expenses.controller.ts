@@ -16,6 +16,18 @@ export class ExpensesController {
         return this.expensesService.create(req.user.id, createExpenseDto);
     }
 
+    /**
+     * GET /expenses/new-since-login
+     * Returns email-imported expenses created since the user's previous login session.
+     * Used to populate the login toast and dashboard banner.
+     */
+    @Get('new-since-login')
+    async getNewSinceLogin(@Request() req) {
+        // Re-fetch user to get lastLoginAt (set at sync time, reflects the PREVIOUS login)
+        const user = await this.expensesService.getUserLastLoginAt(req.user.id);
+        return this.expensesService.getNewEmailExpensesSinceLastLogin(req.user.id, user?.lastLoginAt ?? null);
+    }
+
     @Get()
     @UseInterceptors(UserCacheInterceptor)
     findAll(
