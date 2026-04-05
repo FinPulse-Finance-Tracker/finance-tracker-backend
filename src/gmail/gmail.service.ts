@@ -69,10 +69,13 @@ export class GmailService {
 
         oauth2Client.setCredentials(tokens);
 
-        // Get user's Gmail address for the EmailConnection record
-        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-        const profile = await gmail.users.getProfile({ userId: 'me' });
-        const emailAddress = profile.data.emailAddress || '';
+        // We can't use gmail.users.getProfile without gmail.readonly scope!
+        // Instead, grab the email from the user's database record.
+        const userDb = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true }
+        });
+        const emailAddress = userDb?.email || 'unknown';
 
         // Upsert EmailConnection (provider = 'gmail_forwarding')
         const existingConn = await this.prisma.emailConnection.findFirst({
