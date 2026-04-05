@@ -106,12 +106,22 @@ export class CategoriesService {
         return category;
     }
 
-    // Update custom category
+    // Update category — if it's a system category, create a personal copy for the user
     async update(id: string, userId: string, updateCategoryDto: UpdateCategoryDto) {
         const category = await this.findOne(id, userId);
 
         if (category.isDefault) {
-            throw new ForbiddenException('Cannot modify system categories');
+            // Create a personal override copy instead of modifying the shared category
+            return this.prisma.category.create({
+                data: {
+                    name: updateCategoryDto.name ?? category.name,
+                    icon: updateCategoryDto.icon ?? category.icon,
+                    color: updateCategoryDto.color ?? category.color,
+                    budgetAmount: updateCategoryDto.budgetAmount ?? category.budgetAmount,
+                    userId,
+                    isDefault: false,
+                },
+            });
         }
 
         return this.prisma.category.update({
