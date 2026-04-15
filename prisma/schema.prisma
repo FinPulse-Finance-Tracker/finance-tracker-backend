@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,151 +8,130 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// User Model
 model User {
-  id             String   @id @default(uuid())
-  clerkId        String?  @unique // Clerk User ID for OAuth users
-  email          String   @unique
-  passwordHash   String? // Optional - only for email/password users
-  name           String?
-  profilePicture String? // Profile picture URL from Clerk/OAuth
-  currency          String   @default("LKR")
-  monthlyIncome     Decimal? @db.Decimal(12, 2)
-  forwardingAddress String?  @unique // e.g. receipts-abc123@receipts.yourapp.com
-  forwardingActive  Boolean  @default(false)
-  lastLoginAt       DateTime? // Stamped on every login — used to detect new email imports
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // Relations
-  categories       Category[]
-  expenses         Expense[]
-  budgets          Budget[]
-  recommendations  AIRecommendation[]
-  emailConnections EmailConnection[]
-  feedbacks        Feedback[]
+  id                String             @id @default(uuid())
+  email             String             @unique
+  passwordHash      String?
+  name              String?
+  currency          String             @default("LKR")
+  monthlyIncome     Decimal?           @db.Decimal(12, 2)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  clerkId           String?            @unique
+  profilePicture    String?
+  forwardingActive  Boolean            @default(false)
+  forwardingAddress String?            @unique
+  lastLoginAt       DateTime?
+  recommendations   AIRecommendation[]
+  budgets           Budget[]
+  categories        Category[]
+  emailConnections  EmailConnection[]
+  expenses          Expense[]
+  feedbacks         Feedback[]
 
   @@map("users")
 }
 
-// Category Model
 model Category {
-  id           String   @id @default(uuid())
-  userId       String? // Optional for default categories
-  name         String
-  icon         String?
-  color        String?
-  budgetAmount Decimal? @db.Decimal(12, 2)
-  isDefault    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-
-  // Relations
+  id              String             @id @default(uuid())
+  userId          String?
+  name            String
+  icon            String?
+  color           String?
+  budgetAmount    Decimal?           @db.Decimal(12, 2)
+  isDefault       Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  recommendations AIRecommendation[]
+  budgets         Budget[]
   user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   expenses        Expense[]
-  budgets         Budget[]
-  recommendations AIRecommendation[]
 
   @@map("categories")
 }
 
-// Expense Model
 model Expense {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   userId        String
   categoryId    String?
-  amount        Decimal  @db.Decimal(12, 2)
+  amount        Decimal   @db.Decimal(12, 2)
   description   String?
   merchant      String?
   date          DateTime
   paymentMethod String?
   receiptUrl    String?
-  source        String? // 'manual', 'email', 'receipt', 'recurring_job'
-  notes         String?
+  source        String?
   emailId       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  notes         String?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
   @@index([categoryId])
   @@map("expenses")
 }
 
-// Budget Model
 model Budget {
   id                String    @id @default(uuid())
   userId            String
   categoryId        String
   amount            Decimal   @db.Decimal(12, 2)
-  period            String    @default("monthly") // 'monthly', 'weekly', 'yearly'
+  period            String    @default("monthly")
   startDate         DateTime
   endDate           DateTime?
-  isRecurring       Boolean   @default(false)
-  recurringMonths   String? // e.g. "[0,2,5]" for Jan, Mar, Jun
-  nextRecurringDate DateTime?
-  recurringStatus   String? // 'active', 'inactive'
   createdAt         DateTime  @default(now())
-
-  // Relations
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isRecurring       Boolean   @default(false)
+  nextRecurringDate DateTime?
+  recurringStatus   String?
+  recurringMonths   String?
+  category          Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, period])
   @@map("budgets")
 }
 
-// AI Recommendation Model
 model AIRecommendation {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   userId           String
   categoryId       String?
-  type             String // 'budget', 'merchant', 'savings', 'alternative'
+  type             String
   title            String
   description      String
-  savingsPotential Decimal? @db.Decimal(12, 2)
-  isDismissed      Boolean  @default(false)
-  generatedAt      DateTime @default(now())
-
-  // Relations
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  savingsPotential Decimal?  @db.Decimal(12, 2)
+  isDismissed      Boolean   @default(false)
+  generatedAt      DateTime  @default(now())
+  category         Category? @relation(fields: [categoryId], references: [id])
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isDismissed])
   @@map("ai_recommendations")
 }
 
-// Email Connection Model
 model EmailConnection {
   id           String    @id @default(uuid())
   userId       String
   emailAddress String
-  provider     String // 'gmail', 'outlook'
+  provider     String
   accessToken  String
   refreshToken String
   isActive     Boolean   @default(true)
   lastSynced   DateTime?
   createdAt    DateTime  @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive])
   @@map("email_connections")
 }
 
-// User Feedback Model
 model Feedback {
   id        String   @id @default(uuid())
   userId    String
   message   String
   rating    Int?
   createdAt DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("feedbacks")
